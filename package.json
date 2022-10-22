@@ -1,0 +1,19 @@
+{
+  "name": "fixedpointmathlib",
+  "version": "1.0.0",
+  "description": "A fixed point math library for Cairo and StarkNet",
+  "main": "index.js",
+  "scripts": {
+    "test": "protostar test ./test"
+  },
+  "keywords": [
+    "cairo",
+    "fixed",
+    "point",
+    "math",
+    "lib",
+    "library"
+  ],
+  "author": "dsi",
+  "license": "ISC"
+}
