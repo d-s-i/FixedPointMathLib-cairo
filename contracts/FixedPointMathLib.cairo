@@ -176,54 +176,6 @@ namespace FixedPointMathLib {
         return fpow_loop(x=temp_x, n=nHalf, z=temp_z, baseUnit=baseUnit, baseUnitHalf=baseUnitHalf);
     }
 
-    func sqrt{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr: felt}(x: Uint256) -> (res: Uint256) {
-        alloc_locals;
-
-        let borders: Uint256* = alloc();
-        assert borders[0] = Uint256(low=0, high=1);
-        assert borders[1] = Uint256(low=18446744073709551616, high=0);
-        assert borders[2] = Uint256(low=4294967296, high=0);
-        assert borders[3] = Uint256(low=65536, high=0);
-        assert borders[4] = Uint256(low=256, high=0);
-        assert borders[5] = Uint256(low=16, high=0);
-        assert borders[6] = Uint256(low=8, high=0);
-
-        let shiftingValues: felt* = alloc();
-        assert shiftingValues[0] = 128;
-        assert shiftingValues[1] = 64;
-        assert shiftingValues[2] = 64;
-        assert shiftingValues[3] = 32;
-        assert shiftingValues[4] = 32;
-        assert shiftingValues[5] = 16;
-        assert shiftingValues[6] = 16;
-        assert shiftingValues[7] = 8;
-        assert shiftingValues[8] = 8;
-        assert shiftingValues[9] = 4;
-        assert shiftingValues[10] = 4;
-        assert shiftingValues[11] = 2;
-        assert shiftingValues[12] = 0;
-        assert shiftingValues[13] = 1;
-
-        let (temp_y, temp_z) = _assignYAndZForSQRT(
-            borders_len=7,
-            borders=borders,
-            y=x, 
-            z=Uint256(low=1, high=0),
-            shiftingValues_len=14,
-            shiftingValues=shiftingValues
-        );
-
-        let (z) = _shiftZ(7, x, temp_z);
-        let (zRoundDown, zRoundDownRem) = uint256_unsigned_div_rem(x, z);
-
-        let (zRoundDownLower) = uint256_lt(zRoundDown, z);
-        if(zRoundDownLower == TRUE) {
-            return (res=zRoundDown);
-        }
-
-        return (res=z);
-    }
-
     func _assignZIf{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr: felt}(
         nIsEven: felt,
         baseUnit: Uint256,
@@ -235,63 +187,6 @@ namespace FixedPointMathLib {
         }
         // Else store x in z for now
         return (res=x);
-    }
-
-    func _assignYAndZForSQRT{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr: felt}(
-        borders_len: felt,
-        borders: Uint256*,
-        y: Uint256, 
-        z: Uint256,
-        shiftingValues_len: felt,
-        shiftingValues: felt*
-    ) -> (y: Uint256, z: Uint256) {
-        alloc_locals;
-
-        if(borders_len == 0) {
-            return (y=y, z=z);
-        } 
-    
-        // Uint256(low=0, high=1) = 0x100000000000000000000000000000000
-        let (LT) = uint256_lt(y, [borders]);
-        if(LT == FALSE) {
-            let (temp_y) = uint256_shr(y, Uint256(low=[shiftingValues], high=0));
-            let (temp_z) = uint256_shl(z, Uint256(low=[shiftingValues + 1], high=0));
-
-            return _assignYAndZForSQRT(
-                borders_len - 1,
-                borders + 1,
-                temp_y,
-                temp_z,
-                shiftingValues_len,
-                shiftingValues + 2
-            );
-        } 
-
-        return _assignYAndZForSQRT(
-            borders_len - 1,
-            borders + 1,
-            y,
-            z,
-            shiftingValues_len,
-            shiftingValues + 2
-        );
-    }
-
-    func _shiftZ{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr: felt}(
-        iterationAmount: felt,
-        x: Uint256,
-        z: Uint256
-    ) -> (res: Uint256) {
-
-        if(iterationAmount == 0) {
-            return (res=z);
-        }
-
-        let (division, divRem) = uint256_unsigned_div_rem(x, z);
-        let (addition, additionCarry) = uint256_add(z, division);
-        let (temp_z, temp_z_rem) = uint256_unsigned_div_rem(addition, Uint256(low=2, high=0));
-
-        return _shiftZ(iterationAmount - 1, x, temp_z);
     }
 
     func YAD{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr: felt}() -> (res: Uint256) {
@@ -318,3 +213,214 @@ namespace FixedPointMathLib {
         return (res=RAD);
     }
 }
+
+
+//////////////////////////////
+// Original Solidity Contract
+
+// // SPDX-License-Identifier: AGPL-3.0-only
+// pragma solidity >=0.8.0;
+
+// /// @notice Arithmetic library with operations for fixed-point numbers.
+// /// @author Solmate (https://github.com/Rari-Capital/solmate/blob/main/src/utils/FixedPointMathLib.sol)
+// library FixedPointMathLib {
+//     /*///////////////////////////////////////////////////////////////
+//                             COMMON BASE UNITS
+//     //////////////////////////////////////////////////////////////*/
+
+//     uint256 internal constant YAD = 1e8;
+//     uint256 internal constant WAD = 1e18;
+//     uint256 internal constant RAY = 1e27;
+//     uint256 internal constant RAD = 1e45;
+
+//     /*///////////////////////////////////////////////////////////////
+//                          FIXED POINT OPERATIONS
+//     //////////////////////////////////////////////////////////////*/
+
+//     function fmul(
+//         uint256 x,
+//         uint256 y,
+//         uint256 baseUnit
+//     ) internal pure returns (uint256 z) {
+//         assembly {
+//             // Store x * y in z for now.
+//             z := mul(x, y)
+
+//             // Equivalent to require(x == 0 || (x * y) / x == y)
+//             if iszero(or(iszero(x), eq(div(z, x), y))) {
+//                 revert(0, 0)
+//             }
+
+//             // If baseUnit is zero this will return zero instead of reverting.
+//             z := div(z, baseUnit)
+//         }
+//     }
+
+//     function fdiv(
+//         uint256 x,
+//         uint256 y,
+//         uint256 baseUnit
+//     ) internal pure returns (uint256 z) {
+//         assembly {
+//             // Store x * baseUnit in z for now.
+//             z := mul(x, baseUnit)
+
+//             // Equivalent to require(y != 0 && (x == 0 || (x * baseUnit) / x == baseUnit))
+//             if iszero(and(iszero(iszero(y)), or(iszero(x), eq(div(z, x), baseUnit)))) {
+//                 revert(0, 0)
+//             }
+
+//             // We ensure y is not zero above, so there is never division by zero here.
+//             z := div(z, y)
+//         }
+//     }
+
+//     function fpow(
+//         uint256 x,
+//         uint256 n,
+//         uint256 baseUnit
+//     ) internal pure returns (uint256 z) {
+//         assembly {
+//             switch x
+//             case 0 {
+//                 switch n
+//                 case 0 {
+//                     // 0 ** 0 = 1
+//                     z := baseUnit
+//                 }
+//                 default {
+//                     // 0 ** n = 0
+//                     z := 0
+//                 }
+//             }
+//             default {
+//                 switch mod(n, 2)
+//                 case 0 {
+//                     // If n is even, store baseUnit in z for now.
+//                     z := baseUnit
+//                 }
+//                 default {
+//                     // If n is odd, store x in z for now.
+//                     z := x
+//                 }
+
+//                 // Shifting right by 1 is like dividing by 2.
+//                 let half := shr(1, baseUnit)
+
+//                 for {
+//                     // Shift n right by 1 before looping to halve it.
+//                     n := shr(1, n)
+//                 } n {
+//                     // Shift n right by 1 each iteration to halve it.
+//                     n := shr(1, n)
+//                 } {
+//                     // Revert immediately if x ** 2 would overflow.
+//                     // Equivalent to iszero(eq(div(xx, x), x)) here.
+//                     if shr(128, x) {
+//                         revert(0, 0)
+//                     }
+
+//                     // Store x squared.
+//                     let xx := mul(x, x)
+
+//                     // Round to the nearest number.
+//                     let xxRound := add(xx, half)
+
+//                     // Revert if xx + half overflowed.
+//                     if lt(xxRound, xx) {
+//                         revert(0, 0)
+//                     }
+
+//                     // Set x to scaled xxRound.
+//                     x := div(xxRound, baseUnit)
+
+//                     // If n is not even:
+//                     if mod(n, 2) {
+//                         // Compute z * x.
+//                         let zx := mul(z, x)
+
+//                         // If z * x overflowed:
+//                         if iszero(eq(div(zx, x), z)) {
+//                             // Revert if x is non-zero.
+//                             if iszero(iszero(x)) {
+//                                 revert(0, 0)
+//                             }
+//                         }
+
+//                         // Round to the nearest number.
+//                         let zxRound := add(zx, half)
+
+//                         // Revert if zx + half overflowed.
+//                         if lt(zxRound, zx) {
+//                             revert(0, 0)
+//                         }
+
+//                         // Return properly scaled zxRound.
+//                         z := div(zxRound, baseUnit)
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     /*///////////////////////////////////////////////////////////////
+//                         GENERAL NUMBER UTILITIES
+//     //////////////////////////////////////////////////////////////*/
+
+//     function sqrt(uint256 x) internal pure returns (uint256 z) {
+//         assembly {
+//             // Start off with z at 1.
+//             z := 1
+
+//             // Used below to help find a nearby power of 2.
+//             let y := x
+
+//             // Find the lowest power of 2 that is at least sqrt(x).
+//             if iszero(lt(y, 0x100000000000000000000000000000000)) {
+//                 y := shr(128, y) // Like dividing by 2 ** 128.
+//                 z := shl(64, z)
+//             }
+//             if iszero(lt(y, 0x10000000000000000)) {
+//                 y := shr(64, y) // Like dividing by 2 ** 64.
+//                 z := shl(32, z)
+//             }
+//             if iszero(lt(y, 0x100000000)) {
+//                 y := shr(32, y) // Like dividing by 2 ** 32.
+//                 z := shl(16, z)
+//             }
+//             if iszero(lt(y, 0x10000)) {
+//                 y := shr(16, y) // Like dividing by 2 ** 16.
+//                 z := shl(8, z)
+//             }
+//             if iszero(lt(y, 0x100)) {
+//                 y := shr(8, y) // Like dividing by 2 ** 8.
+//                 z := shl(4, z)
+//             }
+//             if iszero(lt(y, 0x10)) {
+//                 y := shr(4, y) // Like dividing by 2 ** 4.
+//                 z := shl(2, z)
+//             }
+//             if iszero(lt(y, 0x8)) {
+//                 // Equivalent to 2 ** z.
+//                 z := shl(1, z)
+//             }
+
+//             // Shifting right by 1 is like dividing by 2.
+//             z := shr(1, add(z, div(x, z)))
+//             z := shr(1, add(z, div(x, z)))
+//             z := shr(1, add(z, div(x, z)))
+//             z := shr(1, add(z, div(x, z)))
+//             z := shr(1, add(z, div(x, z)))
+//             z := shr(1, add(z, div(x, z)))
+//             z := shr(1, add(z, div(x, z)))
+
+//             // Compute a rounded down version of z.
+//             let zRoundDown := div(x, z)
+
+//             // If zRoundDown is smaller, use it.
+//             if lt(zRoundDown, z) {
+//                 z := zRoundDown
+//             }
+//         }
+//     }
+// }

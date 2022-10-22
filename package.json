@@ -4,7 +4,7 @@
   "description": "A fixed point math library for Cairo and StarkNet",
   "main": "index.js",
   "scripts": {
-    "test": "protostar test ./test"
+    "test": "protostar test ./tests"
   },
   "keywords": [
     "cairo",
