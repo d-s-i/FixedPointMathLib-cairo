@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 %lang starknet
 
 from starkware.cairo.common.cairo_builtins import (HashBuiltin)
